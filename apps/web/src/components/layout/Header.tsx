@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ShoppingCartIcon, UserIcon, MagnifyingGlassIcon,
+  ShoppingCartIcon, MagnifyingGlassIcon,
   Bars3Icon, XMarkIcon, ChevronDownIcon,
 } from '@heroicons/react/24/outline'
 import { useCartStore } from '@/store/cart.store'

@@ -12,8 +12,7 @@ export function CartSummary({ cart }: Props) {
   const availableItems = cart.items.filter(i => i.isAvailable)
   const hasUnavailable = availableItems.length < cart.items.length
   const shipping = 0 // gratis por ahora
-  const tax = cart.subtotal * 0.1
-  const total = cart.subtotal + shipping
+const total = cart.subtotal + shipping
 
   return (
     <div className="card p-6 space-y-4 sticky top-24">

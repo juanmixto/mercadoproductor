@@ -3,18 +3,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { adminApi } from '@/lib/api'
-import { ProductStatus } from '@mercadoproductor/shared'
 import Image from 'next/image'
 import { formatPrice } from '@/lib/utils'
 import { XMarkIcon, CheckIcon, XCircleIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
-
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  PENDING_REVIEW: { label: 'En revisión', color: 'bg-amber-100 text-amber-700' },
-  ACTIVE:         { label: 'Activo',       color: 'bg-green-100 text-green-700' },
-  REJECTED:       { label: 'Rechazado',    color: 'bg-red-100 text-red-700' },
-  DRAFT:          { label: 'Borrador',     color: 'bg-gray-100 text-gray-600' },
-  SUSPENDED:      { label: 'Suspendido',   color: 'bg-orange-100 text-orange-700' },
-}
 
 export default function ProductosAdminPage() {
   const qc = useQueryClient()

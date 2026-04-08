@@ -6,7 +6,7 @@ import { useEffect } from 'react'
 import Link from 'next/link'
 import {
   ShoppingBagIcon, HeartIcon, MapPinIcon,
-  UserIcon, ArrowRightIcon, ChevronRightIcon,
+  UserIcon, ChevronRightIcon,
 } from '@heroicons/react/24/outline'
 
 export default function CuentaPage() {

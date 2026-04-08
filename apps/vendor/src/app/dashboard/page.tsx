@@ -6,7 +6,7 @@ import { formatPrice, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import {
   ShoppingBagIcon, CubeIcon, BanknotesIcon, StarIcon,
-  CheckCircleIcon, ArrowRightIcon, ExclamationCircleIcon,
+  ArrowRightIcon, ExclamationCircleIcon,
   ClockIcon,
 } from '@heroicons/react/24/outline'
 

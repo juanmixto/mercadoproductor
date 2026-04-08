@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { adminApi } from '@/lib/api'
-import { formatDate, formatPrice } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 import { IncidentResolution } from '@mercadoproductor/shared'
 import { XMarkIcon, ClockIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 

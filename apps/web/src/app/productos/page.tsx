@@ -20,7 +20,9 @@ export default function ProductosPage({ searchParams }: { searchParams: SearchPa
       </div>
       <div className="flex flex-col gap-6 lg:flex-row">
         <aside className="w-full lg:w-64 shrink-0">
-          <ProductFilters />
+          <Suspense fallback={<div className="h-64 rounded-xl bg-gray-100 animate-pulse" />}>
+            <ProductFilters />
+          </Suspense>
         </aside>
         <div className="flex-1">
           <Suspense fallback={<ProductGridSkeleton />}>

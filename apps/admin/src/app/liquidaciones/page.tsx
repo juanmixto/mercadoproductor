@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { adminApi } from '@/lib/api'
 import { formatPrice, formatDate } from '@/lib/utils'
-import { SettlementStatus } from '@mercadoproductor/shared'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   DRAFT:            { label: 'Borrador',         color: 'bg-gray-100 text-gray-600' },

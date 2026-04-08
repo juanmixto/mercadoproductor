@@ -7,7 +7,7 @@ import { vendorApi } from '@/lib/api'
 import { formatPrice } from '@/lib/utils'
 import {
   PlusIcon, ExclamationTriangleIcon, PencilIcon,
-  EyeIcon, ArchiveBoxXMarkIcon,
+  EyeIcon,
 } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 

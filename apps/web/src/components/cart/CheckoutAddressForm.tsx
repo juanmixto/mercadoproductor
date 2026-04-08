@@ -24,7 +24,7 @@ interface Props {
 }
 
 export function CheckoutAddressForm({ onSubmit }: Props) {
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, watch } = useForm<FormData>({
     defaultValues: { sameAsBilling: true, shipping: { country: 'ES' }, billing: { country: 'ES' } },
   })
   const sameAsBilling = watch('sameAsBilling')

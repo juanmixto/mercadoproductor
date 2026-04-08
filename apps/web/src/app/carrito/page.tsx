@@ -19,8 +19,8 @@ export default function CarritoPage() {
   }
 
   const items = cart?.items ?? []
-  const hasUnavailable = items.some(i => !i.isAvailable)
-  const hasPriceChanged = items.some(i => i.priceChanged)
+  const hasUnavailable = items.some((i: any) => !i.isAvailable)
+  const hasPriceChanged = items.some((i: any) => i.priceChanged)
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -41,7 +41,7 @@ export default function CarritoPage() {
                 {hasPriceChanged && <p>Algunos precios han cambiado desde que los añadiste al carrito.</p>}
               </div>
             )}
-            {items.map(item => (
+            {items.map((item: any) => (
               <CartItemRow key={item.id} item={item} />
             ))}
           </div>

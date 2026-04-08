@@ -6,7 +6,7 @@ import { formatPrice, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import {
   ShoppingBagIcon, UsersIcon, CubeIcon, ExclamationTriangleIcon,
-  BanknotesIcon, ClockIcon, ArrowTrendingUpIcon, ChevronRightIcon,
+  BanknotesIcon, ChevronRightIcon,
 } from '@heroicons/react/24/outline'
 
 export default function DashboardPage() {

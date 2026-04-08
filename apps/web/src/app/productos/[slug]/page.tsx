@@ -52,7 +52,7 @@ export default async function ProductoPage({ params }: Props) {
           </div>
           {product.images.length > 1 && (
             <div className="grid grid-cols-4 gap-3">
-              {product.images.slice(1).map((img, i) => (
+              {product.images.slice(1).map((img: string, i: number) => (
                 <div key={i} className="relative aspect-square overflow-hidden rounded-lg bg-gray-100">
                   <Image src={img} alt="" fill className="object-cover" />
                 </div>
@@ -66,7 +66,7 @@ export default async function ProductoPage({ params }: Props) {
           {/* Certifications */}
           {product.certifications.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {product.certifications.map(cert => (
+              {product.certifications.map((cert: string) => (
                 <span key={cert} className="badge bg-brand-100 text-brand-700">{cert}</span>
               ))}
             </div>
@@ -119,7 +119,7 @@ export default async function ProductoPage({ params }: Props) {
           {/* Tags */}
           {product.tags.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {product.tags.map(tag => (
+              {product.tags.map((tag: string) => (
                 <span key={tag} className="badge bg-gray-100 text-gray-600">#{tag}</span>
               ))}
             </div>

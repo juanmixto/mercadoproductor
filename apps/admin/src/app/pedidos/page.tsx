@@ -55,7 +55,7 @@ export default function PedidosPage() {
       params.set('limit', '25')
       return adminApi.get(`/orders?${params}`).then(r => r.data)
     },
-    keepPreviousData: true,
+    placeholderData: (prev: any) => prev,
   })
 
   const orders = Array.isArray(data?.data) ? data.data : (data?.data?.data ?? [])

@@ -82,9 +82,6 @@ export default function ProductoresAdminPage() {
         />
         <div className="flex gap-1 rounded-xl bg-gray-100 p-1 w-fit">
           {FILTER_TABS.map(tab => {
-            const count = tab.value === ''
-              ? all.length
-              : all.filter((v: any) => v.status === tab.value).length
             return (
               <button
                 key={tab.value}
