@@ -1,0 +1,183 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# docker-compose.yml — Entorno de DESARROLLO con hot-reload
+# Uso: docker compose up
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: mercadoproductor-dev
+
+services:
+
+  # ─── Base de datos ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       mercadoproductor
+      POSTGRES_USER:     mp_user
+      POSTGRES_PASSWORD: mp_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mp_user -d mercadoproductor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─── Redis (sesiones, caché) ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Migraciones (se ejecuta y termina) ──────────────────────────────────────
+  db-migrate:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.migrate
+    environment:
+      DATABASE_URL: postgresql://mp_user:mp_pass@postgres:5432/mercadoproductor
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # ─── API — Express + TypeScript ─────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: deps              # en dev sólo instala deps, el código viene del volumen
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./packages/shared/src:/app/packages/shared/src
+      - ./packages/db:/app/packages/db
+      - /app/node_modules
+      - /app/apps/api/node_modules
+    working_dir: /app/apps/api
+    command: npx ts-node-dev --respawn --transpile-only src/index.ts
+    environment:
+      NODE_ENV:      development
+      DATABASE_URL:  postgresql://mp_user:mp_pass@postgres:5432/mercadoproductor
+      REDIS_URL:     redis://redis:6379
+      JWT_SECRET:    dev-secret-change-in-prod
+      JWT_EXPIRES_IN: 7d
+      API_PORT:      4000
+      WEB_URL:       http://localhost:3000
+      ADMIN_URL:     http://localhost:3001
+      VENDOR_URL:    http://localhost:3002
+      STRIPE_SECRET_KEY:   ${STRIPE_SECRET_KEY:-sk_test_placeholder}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
+      RESEND_API_KEY: ${RESEND_API_KEY:-re_placeholder}
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ─── Storefront Web ──────────────────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: deps
+    volumes:
+      - ./apps/web/src:/app/apps/web/src
+      - ./apps/web/public:/app/apps/web/public
+      - ./packages/shared/src:/app/packages/shared/src
+      - /app/node_modules
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next          # caché de Next.js
+    working_dir: /app/apps/web
+    command: npm run dev
+    environment:
+      NODE_ENV:               development
+      NEXT_PUBLIC_API_URL:    http://localhost:4000
+      WATCHPACK_POLLING:      "true"   # hot-reload en Docker
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ─── Admin Panel ─────────────────────────────────────────────────────────────
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+      target: deps
+    volumes:
+      - ./apps/admin/src:/app/apps/admin/src
+      - ./packages/shared/src:/app/packages/shared/src
+      - /app/node_modules
+      - /app/apps/admin/node_modules
+      - /app/apps/admin/.next
+    working_dir: /app/apps/admin
+    command: npm run dev
+    environment:
+      NODE_ENV:               development
+      NEXT_PUBLIC_API_URL:    http://localhost:4000
+      PORT:                   3001
+      WATCHPACK_POLLING:      "true"
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ─── Vendor Portal ───────────────────────────────────────────────────────────
+  vendor:
+    build:
+      context: .
+      dockerfile: apps/vendor/Dockerfile
+      target: deps
+    volumes:
+      - ./apps/vendor/src:/app/apps/vendor/src
+      - ./packages/shared/src:/app/packages/shared/src
+      - /app/node_modules
+      - /app/apps/vendor/node_modules
+      - /app/apps/vendor/.next
+    working_dir: /app/apps/vendor
+    command: npm run dev
+    environment:
+      NODE_ENV:               development
+      NEXT_PUBLIC_API_URL:    http://localhost:4000
+      PORT:                   3002
+      WATCHPACK_POLLING:      "true"
+    ports:
+      - "3002:3002"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ─── Adminer (GUI de base de datos, solo dev) ────────────────────────────────
+  adminer:
+    image: adminer:4
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,0 +1,39 @@
+# Dependencies
+**/node_modules
+**/.npm
+
+# Build outputs
+**/.next
+**/dist
+**/build
+**/.turbo
+
+# Prisma generated client (se genera en build)
+**/generated
+
+# Git
+.git
+.gitignore
+
+# Env files (se pasan como variables en docker-compose)
+.env
+.env.*
+!.env.example
+
+# Logs
+**/*.log
+**/npm-debug.log*
+
+# Tests
+**/coverage
+**/__tests__
+
+# Editor
+.vscode
+.idea
+**/*.swp
+**/.DS_Store
+
+# Docker
+docker-compose*.yml
+Dockerfile*

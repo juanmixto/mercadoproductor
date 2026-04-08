@@ -1,0 +1,256 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# docker-compose.prod.yml — Entorno de PRODUCCIÓN
+# Uso: docker compose -f docker-compose.prod.yml up -d
+# Variables requeridas: ver .env.example → copiar a .env y rellenar
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: mercadoproductor-prod
+
+services:
+
+  # ─── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB}
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # En prod NO exponemos el puerto al exterior
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - internal
+
+  # ─── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  # ─── Migraciones ─────────────────────────────────────────────────────────────
+  db-migrate:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.migrate
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - internal
+
+  # ─── API ─────────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runner
+      args:
+        NODE_ENV: production
+    restart: always
+    environment:
+      NODE_ENV:              production
+      DATABASE_URL:          postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL:             redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_SECRET:            ${JWT_SECRET}
+      JWT_EXPIRES_IN:        ${JWT_EXPIRES_IN:-7d}
+      API_PORT:              4000
+      WEB_URL:               ${WEB_URL}
+      ADMIN_URL:             ${ADMIN_URL}
+      VENDOR_URL:            ${VENDOR_URL}
+      STRIPE_SECRET_KEY:     ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      RESEND_API_KEY:        ${RESEND_API_KEY}
+      EMAIL_FROM:            ${EMAIL_FROM}
+      STORAGE_ENDPOINT:      ${STORAGE_ENDPOINT}
+      STORAGE_ACCESS_KEY:    ${STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY:    ${STORAGE_SECRET_KEY}
+      STORAGE_BUCKET:        ${STORAGE_BUCKET}
+      STORAGE_PUBLIC_URL:    ${STORAGE_PUBLIC_URL}
+    expose:
+      - "4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ─── Storefront Web ──────────────────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: runner
+      args:
+        API_URL: http://api:4000
+    restart: always
+    environment:
+      NODE_ENV:            production
+      NEXT_PUBLIC_API_URL: ${WEB_URL}/api/v1   # en prod va por nginx
+    expose:
+      - "3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ─── Admin Panel ─────────────────────────────────────────────────────────────
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+      target: runner
+      args:
+        API_URL: http://api:4000
+    restart: always
+    environment:
+      NODE_ENV: production
+    expose:
+      - "3001"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ─── Vendor Portal ───────────────────────────────────────────────────────────
+  vendor:
+    build:
+      context: .
+      dockerfile: apps/vendor/Dockerfile
+      target: runner
+      args:
+        API_URL: http://api:4000
+    restart: always
+    environment:
+      NODE_ENV: production
+    expose:
+      - "3002"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3002 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ─── Nginx (reverse proxy + SSL termination) ──────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ssl_certs:/etc/nginx/ssl:ro          # montado desde Certbot
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - web
+      - admin
+      - vendor
+      - api
+    networks:
+      - internal
+      - external
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  # ─── Certbot (renovación automática SSL) ─────────────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - ssl_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: >
+      sh -c "trap exit TERM;
+             while :; do
+               certbot renew --webroot -w /var/www/certbot --quiet;
+               sleep 12h & wait $${!};
+             done;"
+    networks:
+      - external
+
+networks:
+  internal:
+    driver: bridge
+    internal: true          # sin acceso directo desde fuera
+  external:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  ssl_certs:
+  certbot_www:
+  nginx_logs:

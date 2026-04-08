@@ -1,0 +1,16 @@
+# Contenedor de migraciones — se ejecuta y termina
+# Corre: prisma migrate deploy + prisma db seed (solo en dev)
+FROM node:18-alpine
+RUN apk add --no-cache openssl
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY packages/db/package.json ./packages/db/
+
+RUN npm ci --ignore-scripts
+
+COPY packages/db ./packages/db
+
+RUN cd packages/db && npx prisma generate
+
+CMD ["sh", "-c", "cd packages/db && npx prisma migrate deploy && echo '✅ Migraciones aplicadas'"]
