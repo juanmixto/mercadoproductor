@@ -1,5 +1,7 @@
-// Mercado Productor — Prisma Schema
-// PostgreSQL + multi-vendor marketplace
+// ═══════════════════════════════════════════════════════════════════════════════
+// Mercado Productor — Schema Prisma (PostgreSQL)
+// Modelo serio para marketplace multi-vendedor de pequeños productores
+// ═══════════════════════════════════════════════════════════════════════════════
 
 generator client {
   provider = "prisma-client-js"
@@ -11,9 +13,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// USERS & AUTH
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: IDENTIDAD Y AUTENTICACIÓN
+// ═══════════════════════════════════════════════════════════════════════════════
 
 enum UserRole {
   CUSTOMER
@@ -26,27 +28,40 @@ enum UserRole {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
+  id            String   @id @default(cuid())
+  email         String   @unique
   passwordHash  String
   firstName     String
   lastName      String
   phone         String?
-  role          UserRole  @default(CUSTOMER)
-  isActive      Boolean   @default(true)
-  emailVerified Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  avatarUrl     String?
+  role          UserRole @default(CUSTOMER)
+  isActive      Boolean  @default(true)
+  emailVerified Boolean  @default(false)
+  phoneVerified Boolean  @default(false)
+  // Metadata
+  lastLoginAt   DateTime?
+  loginCount    Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime? // soft delete
 
-  vendor          Vendor?
-  orders          Order[]
-  cart            Cart?
-  incidentsOpened Incident[] @relation("CustomerIncidents")
-  adminEvents     OrderEvent[] @relation("AdminEvents")
-  addresses       CustomerAddress[]
-  sessions        UserSession[]
+  vendor            Vendor?
+  orders            Order[]
+  cart              Cart?
+  addresses         CustomerAddress[]
+  wishlists         Wishlist[]
+  sessions          UserSession[]
+  reviews           ProductReview[]
+  incidentsOpened   Incident[]       @relation("CustomerIncidents")
+  adminOrderEvents  OrderEvent[]     @relation("AdminOrderEvents")
+  adminVendorEvents VendorEvent[]    @relation("AdminVendorEvents")
+  auditLogs         AuditLog[]       @relation("ActorAuditLogs")
+  notifications     Notification[]
 
   @@index([email])
+  @@index([role])
+  @@index([deletedAt])
   @@map("users")
 }
 
@@ -54,6 +69,8 @@ model UserSession {
   id        String   @id @default(cuid())
   userId    String
   token     String   @unique
+  userAgent String?
+  ipAddress String?
   expiresAt DateTime
   createdAt DateTime @default(now())
 
@@ -61,14 +78,16 @@ model UserSession {
 
   @@index([token])
   @@index([userId])
+  @@index([expiresAt])
   @@map("user_sessions")
 }
 
 model CustomerAddress {
   id         String  @id @default(cuid())
   userId     String
-  label      String?
+  label      String? // "Casa", "Trabajo"
   isDefault  Boolean @default(false)
+  // Campos dirección
   name       String
   line1      String
   line2      String?
@@ -77,6 +96,9 @@ model CustomerAddress {
   postalCode String
   country    String  @default("ES")
   phone      String?
+  // Coordenadas opcionales
+  lat        Decimal? @db.Decimal(10, 7)
+  lng        Decimal? @db.Decimal(10, 7)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -84,78 +106,201 @@ model CustomerAddress {
   @@map("customer_addresses")
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// VENDORS (PRODUCTORES)
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: VENDEDOR (PRODUCTOR)
+// ═══════════════════════════════════════════════════════════════════════════════
 
 enum VendorStatus {
-  APPLYING
-  PENDING_DOCS
-  ACTIVE
-  SUSPENDED_TEMP
-  REJECTED
-  DEACTIVATED
+  APPLYING        // solicitud enviada
+  PENDING_DOCS    // esperando documentación
+  ACTIVE          // operativo
+  SUSPENDED_TEMP  // suspensión temporal
+  REJECTED        // rechazado definitivo
+  DEACTIVATED     // dado de baja
 }
 
 model Vendor {
-  id                String       @id @default(cuid())
-  userId            String       @unique
-  slug              String       @unique
-  displayName       String
-  description       String?
-  logoUrl           String?
-  bannerUrl         String?
-  location          String?
-  originRegion      String?
-  website           String?
-  status            VendorStatus @default(APPLYING)
-  taxId             String?
-  iban              String?
-  bankAccountName   String?
-  commissionRate    Decimal?     @db.Decimal(5, 4)
-  orderCutoffDays   String[]     // ["MON","WED","FRI"]
-  orderCutoffTime   String?      // "12:00"
-  preparationDays   Int          @default(1)
-  shippingZones     Json?        // { zones: [...], rates: [...] }
-  rejectionReason   String?
-  warningCount      Int          @default(0)
-  cancellationRate  Decimal      @default(0) @db.Decimal(5, 4)
-  avgRating         Decimal      @default(0) @db.Decimal(3, 2)
-  totalReviews      Int          @default(0)
+  id              String       @id @default(cuid())
+  userId          String       @unique
+  slug            String       @unique
+  displayName     String
+  legalName       String?      // razón social
+  description     String?      @db.Text
+  shortBio        String?      // máx 160 chars para listings
+  logoUrl         String?
+  bannerUrl       String?
+  // Ubicación
+  location        String?      // texto libre visible en storefront
+  originRegion    String?
+  address         String?
+  postalCode      String?
+  city            String?
+  province        String?
+  country         String       @default("ES")
+  lat             Decimal?     @db.Decimal(10, 7)
+  lng             Decimal?     @db.Decimal(10, 7)
+  // Contacto
+  website         String?
+  publicEmail     String?
+  publicPhone     String?
+  // Estado
+  status          VendorStatus @default(APPLYING)
+  rejectionReason String?
+  suspendedReason String?
+  warningCount    Int          @default(0)
+  // Datos fiscales (encriptados en prod)
+  taxId           String?      // CIF/NIF
+  vatRegistered   Boolean      @default(false)
+  // Datos bancarios (encriptados en prod)
+  iban            String?
+  bankAccountName String?
+  bankName        String?
+  swiftBic        String?
+  // Configuración operativa
+  orderCutoffDays   String[]   // ["MON","WED","FRI"]
+  orderCutoffTime   String?    // "12:00"
+  preparationDays   Int        @default(1)
+  minOrderAmount    Decimal?   @db.Decimal(10, 2)
+  freeShippingAbove Decimal?   @db.Decimal(10, 2)
+  // Métricas (se actualizan periódicamente, no en tiempo real)
+  avgRating         Decimal    @default(0) @db.Decimal(3, 2)
+  totalReviews      Int        @default(0)
+  cancellationRate  Decimal    @default(0) @db.Decimal(5, 4)
+  totalSales        Decimal    @default(0) @db.Decimal(12, 2)
+  // Comisión específica (sobrescribe la global si está presente)
+  commissionRate    Decimal?   @db.Decimal(5, 4)
+  // Timestamps
   activatedAt       DateTime?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
-  user              User               @relation(fields: [userId], references: [id])
+  user              User                @relation(fields: [userId], references: [id])
   products          Product[]
+  shippingZones     ShippingZone[]
+  documents         VendorDocument[]
   fulfillments      VendorFulfillment[]
   settlements       Settlement[]
   commissionRules   CommissionRule[]
-  incidentsReceived Incident[]         @relation("VendorIncidents")
+  incidentsReceived Incident[]          @relation("VendorIncidents")
   vendorEvents      VendorEvent[]
 
   @@index([slug])
   @@index([status])
+  @@index([city, province])
   @@map("vendors")
+}
+
+enum VendorDocumentType {
+  TAX_REGISTRATION  // alta en hacienda
+  FOOD_SAFETY       // certificado sanitario
+  ORGANIC_CERT      // certificado ecológico
+  BANK_STATEMENT    // extracto bancario
+  ID_DOCUMENT       // DNI/NIE/Pasaporte
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+model VendorDocument {
+  id           String             @id @default(cuid())
+  vendorId     String
+  type         VendorDocumentType
+  name         String             // nombre descriptivo
+  fileUrl      String
+  fileSize     Int?               // bytes
+  mimeType     String?
+  status       DocumentStatus     @default(PENDING)
+  expiresAt    DateTime?
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId])
+  @@index([status])
+  @@map("vendor_documents")
 }
 
 model VendorEvent {
   id          String   @id @default(cuid())
   vendorId    String
-  eventType   String
-  triggeredBy String
+  eventType   String   // vendor.activated | vendor.suspended | vendor.warning_issued ...
+  triggeredBy String   // admin | system
+  adminId     String?
   metadata    Json?
+  note        String?
   createdAt   DateTime @default(now())
 
   vendor Vendor @relation(fields: [vendorId], references: [id])
+  admin  User?  @relation("AdminVendorEvents", fields: [adminId], references: [id])
 
   @@index([vendorId])
+  @@index([createdAt])
   @@map("vendor_events")
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CATALOG
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: ENVÍOS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model ShippingZone {
+  id                  String   @id @default(cuid())
+  vendorId            String
+  name                String   // "Península", "Islas Canarias"
+  countries           String[]
+  provinces           String[] // filtro opcional por provincia
+  postalCodePatterns  String[] // e.g. ["28*", "29*"]
+  isDefault           Boolean  @default(false)
+  isActive            Boolean  @default(true)
+  position            Int      @default(0)
+  createdAt           DateTime @default(now())
+
+  vendor Vendor         @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  rates  ShippingRate[]
+
+  @@index([vendorId])
+  @@map("shipping_zones")
+}
+
+enum ShippingMethod {
+  STANDARD
+  EXPRESS
+  PICKUP
+  FREIGHT
+}
+
+model ShippingRate {
+  id               String         @id @default(cuid())
+  zoneId           String
+  name             String         // "Envío estándar 3-5 días"
+  method           ShippingMethod @default(STANDARD)
+  carrier          String?        // "Correos", "SEUR", "MRW"
+  price            Decimal        @db.Decimal(10, 2)
+  freeAboveAmount  Decimal?       @db.Decimal(10, 2) // envío gratis a partir de X
+  minWeight        Decimal?       @db.Decimal(8, 3)
+  maxWeight        Decimal?       @db.Decimal(8, 3)
+  minDays          Int            @default(1)
+  maxDays          Int            @default(5)
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+
+  zone ShippingZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@index([zoneId])
+  @@map("shipping_rates")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: CATÁLOGO
+// ═══════════════════════════════════════════════════════════════════════════════
 
 model Category {
   id          String     @id @default(cuid())
@@ -164,25 +309,29 @@ model Category {
   name        String
   description String?
   imageUrl    String?
+  metaTitle   String?
+  metaDesc    String?
   position    Int        @default(0)
   isActive    Boolean    @default(true)
   createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
-  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id])
-  children    Category[] @relation("CategoryTree")
-  products    Product[]
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
 
   @@index([parentId])
+  @@index([isActive, position])
   @@map("categories")
 }
 
 enum ProductStatus {
-  DRAFT
-  PENDING_REVIEW
-  ACTIVE
-  SUSPENDED
-  DISCONTINUED
-  REJECTED
+  DRAFT           // borrador, no visible
+  PENDING_REVIEW  // enviado a revisión
+  ACTIVE          // publicado y visible
+  SUSPENDED       // suspendido por admin
+  DISCONTINUED    // descatalogado por vendor
+  REJECTED        // rechazado en revisión
 }
 
 model Product {
@@ -192,39 +341,62 @@ model Product {
   slug             String        @unique
   name             String
   description      String        @db.Text
+  shortDescription String?       // para cards de listing
   images           String[]
   status           ProductStatus @default(DRAFT)
+  // Precio base (para productos sin variantes)
   basePrice        Decimal       @db.Decimal(10, 2)
   compareAtPrice   Decimal?      @db.Decimal(10, 2)
   taxRate          Decimal       @default(0.10) @db.Decimal(4, 3)
-  unit             String        @default("ud")
+  // Unidad y stock
+  unit             String        @default("ud")  // "kg", "ud", "botella", "l"
   minOrderQuantity Int           @default(1)
   maxOrderQuantity Int?
   stock            Int           @default(0)
   lowStockAlert    Int           @default(5)
+  trackStock       Boolean       @default(true)
+  // Logística
   weight           Decimal?      @db.Decimal(8, 3)
+  // Atributos de producto alimentario
+  shelfLifeDays     Int?         // vida útil en días
+  storageInstructions String?
+  ingredients       String?      @db.Text
+  allergens         String[]
+  nutritionalInfo   Json?        // { energia: ..., proteinas: ..., ... }
+  // Metadatos
   tags             String[]
   certifications   String[]
   originRegion     String?
+  // Control de calidad y revisión
   rejectionReason  String?
   reviewNote       String?
+  // Auditoría de precios (inmutable si hay pedidos)
   lastPriceChange  DateTime?
   previousPrice    Decimal?      @db.Decimal(10, 2)
-  isDigital        Boolean       @default(false)
+  // SEO
+  metaTitle        String?
+  metaDescription  String?
+  // Timestamps
   publishedAt      DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
-  vendor    Vendor           @relation(fields: [vendorId], references: [id])
-  category  Category         @relation(fields: [categoryId], references: [id])
-  variants  ProductVariant[]
-  cartItems CartItem[]
-  orderLines OrderLine[]
+  vendor         Vendor           @relation(fields: [vendorId], references: [id])
+  category       Category         @relation(fields: [categoryId], references: [id])
+  variants       ProductVariant[]
+  cartItems      CartItem[]
+  orderLines     OrderLine[]
+  reviews        ProductReview[]
+  stockMovements StockMovement[]
+  wishlistItems  WishlistItem[]
 
+  // Índice de texto completo (PostgreSQL)
   @@index([vendorId])
   @@index([categoryId])
   @@index([status])
   @@index([slug])
+  @@index([status, publishedAt])
+  @@index([tags])
   @@map("products")
 }
 
@@ -234,27 +406,199 @@ model ProductVariant {
   sku        String   @unique
   name       String
   price      Decimal  @db.Decimal(10, 2)
+  compareAt  Decimal? @db.Decimal(10, 2)
   stock      Int      @default(0)
   weight     Decimal? @db.Decimal(8, 3)
-  attributes Json     // {"size": "L", "color": "red"}
+  attributes Json     // {"formato": "500ml", "tipo": "picual"}
   imageUrl   String?
+  barcode    String?
   isActive   Boolean  @default(true)
   position   Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  cartItems  CartItem[]
-  orderLines OrderLine[]
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems      CartItem[]
+  orderLines     OrderLine[]
+  stockMovements StockMovement[]
+  wishlistItems  WishlistItem[]
 
   @@index([productId])
   @@index([sku])
   @@map("product_variants")
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CART
-// ─────────────────────────────────────────────────────────────────────────────
+// Ledger inmutable de movimientos de stock
+enum StockMovementType {
+  INITIAL      // carga inicial
+  SALE         // venta (negativo)
+  RETURN       // devolución (positivo)
+  ADJUSTMENT   // ajuste manual
+  DAMAGE       // merma
+  PURCHASE     // reposición de stock
+  RESERVED     // reserva temporal
+  UNRESERVED   // liberación de reserva
+}
+
+model StockMovement {
+  id            String            @id @default(cuid())
+  productId     String
+  variantId     String?
+  type          StockMovementType
+  quantity      Int               // puede ser negativo (SALE, DAMAGE)
+  balanceAfter  Int               // stock resultante tras el movimiento
+  referenceType String?           // "order" | "incident" | "manual"
+  referenceId   String?           // id del pedido/incidencia
+  note          String?
+  createdBy     String?           // userId
+  createdAt     DateTime          @default(now())
+
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([productId])
+  @@index([variantId])
+  @@index([createdAt])
+  @@index([referenceType, referenceId])
+  @@map("stock_movements")
+}
+
+// Reseñas verificadas (solo si hay orderLine completada)
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  REJECTED
+  HIDDEN
+}
+
+model ProductReview {
+  id                String       @id @default(cuid())
+  productId         String
+  vendorId          String
+  customerId        String
+  orderLineId       String?      @unique // única review por línea
+  rating            Int          // 1-5
+  title             String?
+  body              String?      @db.Text
+  images            String[]
+  isVerifiedPurchase Boolean     @default(false)
+  status            ReviewStatus @default(PENDING)
+  helpfulCount      Int          @default(0)
+  adminNote         String?
+  publishedAt       DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  product   Product   @relation(fields: [productId], references: [id])
+  customer  User      @relation(fields: [customerId], references: [id])
+  orderLine OrderLine? @relation(fields: [orderLineId], references: [id])
+
+  @@index([productId])
+  @@index([vendorId])
+  @@index([customerId])
+  @@index([status])
+  @@map("product_reviews")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: WISHLIST
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model Wishlist {
+  id         String   @id @default(cuid())
+  customerId String
+  name       String   @default("Lista de deseos")
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  customer User           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items    WishlistItem[]
+
+  @@index([customerId])
+  @@map("wishlists")
+}
+
+model WishlistItem {
+  id         String   @id @default(cuid())
+  wishlistId String
+  productId  String
+  variantId  String?
+  addedAt    DateTime @default(now())
+
+  wishlist Wishlist        @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  product  Product         @relation(fields: [productId], references: [id])
+  variant  ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@unique([wishlistId, productId, variantId])
+  @@index([wishlistId])
+  @@map("wishlist_items")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: CUPONES Y DESCUENTOS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+enum CouponType {
+  PERCENTAGE        // descuento en %
+  FIXED_AMOUNT      // importe fijo
+  FREE_SHIPPING     // envío gratis
+}
+
+enum CouponScope {
+  ALL              // todo el carrito
+  VENDOR           // solo productos de un vendor
+  CATEGORY         // solo productos de una categoría
+  PRODUCT          // producto específico
+}
+
+model Coupon {
+  id                 String      @id @default(cuid())
+  code               String      @unique
+  name               String
+  description        String?
+  type               CouponType
+  scope              CouponScope @default(ALL)
+  scopeVendorId      String?
+  scopeCategoryId    String?
+  scopeProductId     String?
+  value              Decimal     @db.Decimal(10, 4) // % o importe
+  minOrderAmount     Decimal?    @db.Decimal(10, 2)
+  maxDiscountAmount  Decimal?    @db.Decimal(10, 2) // techo para %
+  usageLimit         Int?        // total de usos
+  usagePerCustomer   Int?        // usos por cliente
+  currentUsage       Int         @default(0)
+  isActive           Boolean     @default(true)
+  validFrom          DateTime
+  validTo            DateTime?
+  createdBy          String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  usages CouponUsage[]
+
+  @@index([code])
+  @@index([isActive, validFrom, validTo])
+  @@map("coupons")
+}
+
+model CouponUsage {
+  id              String   @id @default(cuid())
+  couponId        String
+  orderId         String   @unique
+  customerId      String
+  discountApplied Decimal  @db.Decimal(10, 2)
+  usedAt          DateTime @default(now())
+
+  coupon Coupon @relation(fields: [couponId], references: [id])
+
+  @@index([couponId])
+  @@index([customerId])
+  @@map("coupon_usages")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: CARRITO
+// ═══════════════════════════════════════════════════════════════════════════════
 
 enum CartStatus {
   ACTIVE
@@ -268,7 +612,8 @@ model Cart {
   sessionId  String     @unique
   status     CartStatus @default(ACTIVE)
   currency   String     @default("EUR")
-  couponCode String?
+  couponId   String?
+  couponCode String?    // desnormalizado para validación rápida
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   expiresAt  DateTime
@@ -278,6 +623,7 @@ model Cart {
 
   @@index([sessionId])
   @@index([customerId])
+  @@index([status, expiresAt])
   @@map("carts")
 }
 
@@ -289,8 +635,9 @@ model CartItem {
   vendorId         String
   quantity         Int
   unitPrice        Decimal  @db.Decimal(10, 2)
+  // Snapshot para detectar cambios mientras está en carrito
   priceSnapshot    Json     // { name, imageUrl, vendorName, price, capturedAt }
-  fulfillmentGroup String
+  fulfillmentGroup String   // agrupa por vendor para calcular envío
   isAvailable      Boolean  @default(true)
   priceChanged     Boolean  @default(false)
   metadata         Json?
@@ -303,27 +650,36 @@ model CartItem {
 
   @@unique([cartId, productId, variantId])
   @@index([cartId])
+  @@index([productId])
   @@map("cart_items")
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ORDERS
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: PEDIDOS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Contador de secuencia para ORD-YYYY-NNNNN (una fila por año)
+model OrderCounter {
+  year         Int @id
+  lastSequence Int @default(0)
+
+  @@map("order_counters")
+}
 
 enum OrderStatus {
-  PLACED
-  PAYMENT_PENDING
-  PAYMENT_FAILED
-  PAYMENT_CONFIRMED
-  PROCESSING
-  PARTIALLY_READY
-  READY_TO_SHIP
-  PARTIALLY_SHIPPED
-  SHIPPED
-  PARTIALLY_DELIVERED
-  DELIVERED
-  COMPLETED
-  CANCELLED
+  PLACED               // pedido realizado, pago pendiente
+  PAYMENT_PENDING      // en proceso de pago
+  PAYMENT_FAILED       // pago fallido (terminal, cliente puede reintentar)
+  PAYMENT_CONFIRMED    // pago capturado
+  PROCESSING           // productores confirmando sus líneas
+  PARTIALLY_READY      // algún productor listo, otros preparando
+  READY_TO_SHIP        // todos listos para envío
+  PARTIALLY_SHIPPED    // algún paquete enviado
+  SHIPPED              // todos los paquetes enviados
+  PARTIALLY_DELIVERED  // algún paquete entregado
+  DELIVERED            // todo entregado
+  COMPLETED            // cerrado sin incidencias (X días post-entrega)
+  CANCELLED            // cancelado
 }
 
 enum PaymentStatus {
@@ -340,35 +696,48 @@ model Order {
   orderNumber       String        @unique // ORD-2026-00412
   customerId        String
   status            OrderStatus   @default(PLACED)
-  shippingAddress   Json          // Address snapshot
-  billingAddress    Json          // Address snapshot
-  paymentIntentId   String?
+  // Snapshots inmutables (no cambian aunque el cliente edite su dirección)
+  shippingAddress   Json
+  billingAddress    Json
+  // Pago
   paymentStatus     PaymentStatus @default(PENDING)
   currency          String        @default("EUR")
+  // Totales
   subtotal          Decimal       @db.Decimal(10, 2)
   shippingTotal     Decimal       @db.Decimal(10, 2) @default(0)
   discountTotal     Decimal       @db.Decimal(10, 2) @default(0)
   taxTotal          Decimal       @db.Decimal(10, 2)
   grandTotal        Decimal       @db.Decimal(10, 2)
+  refundedTotal     Decimal       @db.Decimal(10, 2) @default(0)
+  // Cupón aplicado
   couponCode        String?
+  couponDiscount    Decimal?      @db.Decimal(10, 2)
+  // Cliente
   notesFromCustomer String?
   cancelReason      String?
+  // Timestamps de ciclo de vida
   placedAt          DateTime      @default(now())
-  confirmedAt       DateTime?
-  fulfilledAt       DateTime?
-  closedAt          DateTime?
+  confirmedAt       DateTime?     // pago confirmado
+  fulfilledAt       DateTime?     // todos enviados
+  deliveredAt       DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  // Auditoría
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
   customer     User               @relation(fields: [customerId], references: [id])
   lines        OrderLine[]
   fulfillments VendorFulfillment[]
+  payments     Payment[]
   events       OrderEvent[]
   incidents    Incident[]
 
   @@index([customerId])
   @@index([status])
   @@index([orderNumber])
+  @@index([placedAt])
+  @@index([paymentStatus])
   @@map("orders")
 }
 
@@ -390,28 +759,33 @@ model OrderLine {
   vendorId        String
   productId       String
   variantId       String?
-  productSnapshot Json            // { name, imageUrl, vendorName, sku, description }
+  // Snapshot inmutable del producto en el momento del pedido
+  productSnapshot Json            // { name, imageUrl, vendorName, sku, description, unit }
   quantity        Int
   unitPrice       Decimal         @db.Decimal(10, 2)
   lineTotal       Decimal         @db.Decimal(10, 2)
   taxRate         Decimal         @db.Decimal(4, 3)
   taxAmount       Decimal         @db.Decimal(10, 2)
+  // Estado independiente por línea
   status          OrderLineStatus @default(PENDING_VENDOR_CONFIRMATION)
   fulfillmentId   String?
   cancelReason    String?
+  // Timestamps
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  order       Order             @relation(fields: [orderId], references: [id])
-  product     Product           @relation(fields: [productId], references: [id])
-  variant     ProductVariant?   @relation(fields: [variantId], references: [id])
-  fulfillment VendorFulfillment? @relation(fields: [fulfillmentId], references: [id])
-  incidents   Incident[]
+  order           Order             @relation(fields: [orderId], references: [id])
+  product         Product           @relation(fields: [productId], references: [id])
+  variant         ProductVariant?   @relation(fields: [variantId], references: [id])
+  fulfillment     VendorFulfillment? @relation(fields: [fulfillmentId], references: [id])
+  incidents       Incident[]
   settlementLines SettlementLine[]
+  review          ProductReview?
 
   @@index([orderId])
   @@index([vendorId])
   @@index([productId])
+  @@index([status])
   @@map("order_lines")
 }
 
@@ -425,18 +799,22 @@ enum FulfillmentStatus {
   FAILED
 }
 
+// Lo que ve y gestiona el productor — nunca el Order completo
 model VendorFulfillment {
-  id             String            @id @default(cuid())
-  orderId        String
-  vendorId       String
-  status         FulfillmentStatus @default(PENDING)
-  trackingNumber String?
-  carrier        String?
-  vendorNotes    String?
-  shippedAt      DateTime?
-  deliveredAt    DateTime?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id                  String            @id @default(cuid())
+  orderId             String
+  vendorId            String
+  status              FulfillmentStatus @default(PENDING)
+  trackingNumber      String?
+  carrier             String?
+  shippingRateId      String?           // tarifa aplicada
+  shippingCost        Decimal?          @db.Decimal(10, 2)
+  estimatedDeliveryAt DateTime?
+  vendorNotes         String?
+  shippedAt           DateTime?
+  deliveredAt         DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
   order  Order       @relation(fields: [orderId], references: [id])
   vendor Vendor      @relation(fields: [vendorId], references: [id])
@@ -444,94 +822,232 @@ model VendorFulfillment {
 
   @@index([orderId])
   @@index([vendorId])
+  @@index([status])
   @@map("vendor_fulfillments")
 }
 
+// Log inmutable de transiciones de estado
 model OrderEvent {
   id          String   @id @default(cuid())
   orderId     String
-  eventType   String
+  eventType   String   // order.placed | payment.confirmed | line.cancelled ...
   triggeredBy String   // customer | vendor | admin | system
   adminId     String?
   metadata    Json?
   createdAt   DateTime @default(now())
 
-  order Order  @relation(fields: [orderId], references: [id])
-  admin User?  @relation("AdminEvents", fields: [adminId], references: [id])
+  order Order @relation(fields: [orderId], references: [id])
+  admin User? @relation("AdminOrderEvents", fields: [adminId], references: [id])
 
   @@index([orderId])
+  @@index([createdAt])
   @@map("order_events")
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// COMMISSIONS & SETTLEMENTS
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: PAGOS Y DEVOLUCIONES
+// ═══════════════════════════════════════════════════════════════════════════════
 
-enum CommissionType {
-  PERCENTAGE
-  FIXED
-  TIERED
+enum PaymentProvider {
+  STRIPE
+  REDSYS
+  PAYPAL
+  BIZUM
+  MANUAL     // transferencia bancaria gestionada por admin
 }
 
+enum PaymentMethod {
+  CARD
+  SEPA_DEBIT
+  PAYPAL
+  BIZUM
+  BANK_TRANSFER
+  WALLET      // Apple Pay, Google Pay
+}
+
+enum PaymentState {
+  PENDING
+  AUTHORIZED    // autenticado, no capturado
+  CAPTURED      // dinero retenido
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model Payment {
+  id                 String          @id @default(cuid())
+  orderId            String
+  customerId         String
+  provider           PaymentProvider @default(STRIPE)
+  method             PaymentMethod?
+  // IDs del PSP
+  providerPaymentId  String?         // Stripe PaymentIntent ID
+  providerChargeId   String?         // Stripe Charge ID
+  // Importe
+  amount             Decimal         @db.Decimal(10, 2)
+  currency           String          @default("EUR")
+  state              PaymentState    @default(PENDING)
+  // Datos de la tarjeta (solo metadatos, nunca datos sensibles)
+  cardLast4          String?
+  cardBrand          String?
+  cardExpMonth       Int?
+  cardExpYear        Int?
+  // Recibo
+  receiptUrl         String?
+  // Metadatos del PSP
+  providerMetadata   Json?           // respuesta raw del PSP (para soporte)
+  // Error
+  errorCode          String?
+  errorMessage       String?
+  // Timestamps
+  authorizedAt       DateTime?
+  capturedAt         DateTime?
+  failedAt           DateTime?
+  cancelledAt        DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  order   Order    @relation(fields: [orderId], references: [id])
+  refunds Refund[]
+
+  @@index([orderId])
+  @@index([customerId])
+  @@index([providerPaymentId])
+  @@index([state])
+  @@map("payments")
+}
+
+enum RefundState {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+enum RefundFundedBy {
+  VENDOR        // se descuenta de la liquidación del vendor
+  MARKETPLACE   // asumido por el marketplace
+  SPLIT         // parcialmente repartido
+}
+
+model Refund {
+  id                    String         @id @default(cuid())
+  paymentId             String
+  orderId               String
+  orderLineId           String?
+  incidentId            String?
+  // Importes
+  amount                Decimal        @db.Decimal(10, 2)
+  currency              String         @default("EUR")
+  // Origen del coste
+  fundedBy              RefundFundedBy
+  splitVendorAmount     Decimal?       @db.Decimal(10, 2)
+  splitMarketplaceAmount Decimal?      @db.Decimal(10, 2)
+  // Estado
+  state                 RefundState    @default(PENDING)
+  reason                String
+  providerRefundId      String?        // ID del refund en Stripe
+  providerMetadata      Json?
+  // Quién lo procesó
+  processedBy           String?        // adminId
+  errorMessage          String?
+  // Timestamps
+  processedAt           DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@index([orderId])
+  @@index([incidentId])
+  @@index([state])
+  @@map("refunds")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: COMISIONES Y LIQUIDACIONES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+enum CommissionType {
+  PERCENTAGE  // % sobre base imponible
+  FIXED       // importe fijo por línea
+  TIERED      // por tramos de volumen mensual
+}
+
+// Las reglas se resuelven por prioridad: vendor-específica > categoría > global
 model CommissionRule {
-  id                String         @id @default(cuid())
-  name              String
-  type              CommissionType
-  appliesTo         String         @default("all") // "all" | vendor_id | category_id | product_id
-  appliesToId       String?
-  priority          Int            @default(0)
-  rate              Decimal?       @db.Decimal(5, 4)
-  tiers             Json?          // [{ from, to, rate }]
-  includesTax       Boolean        @default(false)
-  includesShipping  Boolean        @default(false)
-  vendorId          String?        // null = global rule
-  validFrom         DateTime
-  validTo           DateTime?
-  isActive          Boolean        @default(true)
-  createdAt         DateTime       @default(now())
+  id               String         @id @default(cuid())
+  name             String
+  type             CommissionType
+  // Ámbito de aplicación (solo uno de los tres puede estar relleno)
+  vendorId         String?        // null = global
+  categoryId       String?
+  productId        String?
+  priority         Int            @default(0) // mayor = gana
+  // Importe
+  rate             Decimal?       @db.Decimal(5, 4)  // para PERCENTAGE y FIXED
+  tiers            Json?          // [{ from: 0, to: 500, rate: 0.15 }, ...]
+  // Base de cálculo
+  includesTax      Boolean        @default(false)
+  includesShipping Boolean        @default(false)
+  // Vigencia
+  validFrom        DateTime
+  validTo          DateTime?
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
 
   vendor Vendor? @relation(fields: [vendorId], references: [id])
 
   @@index([vendorId])
-  @@index([appliesTo, appliesToId])
+  @@index([isActive, validFrom, validTo])
   @@map("commission_rules")
 }
 
 enum SettlementStatus {
-  DRAFT
-  PENDING_APPROVAL
-  APPROVED
-  PAID
-  DISPUTED
+  DRAFT             // generado, pendiente de revisión
+  PENDING_APPROVAL  // enviado al responsable financiero
+  APPROVED          // aprobado, pendiente de pago
+  PAID              // transferencia realizada
+  DISPUTED          // vendor ha impugnado
 }
 
 model Settlement {
-  id                String           @id @default(cuid())
-  vendorId          String
-  periodFrom        DateTime
-  periodTo          DateTime
-  status            SettlementStatus @default(DRAFT)
-  grossSales        Decimal          @db.Decimal(12, 2)
-  commissionTotal   Decimal          @db.Decimal(12, 2)
-  refundsDeducted   Decimal          @db.Decimal(12, 2) @default(0)
-  adjustments       Decimal          @db.Decimal(12, 2) @default(0)
-  adjustmentsNote   String?
-  netPayable        Decimal          @db.Decimal(12, 2)
-  paymentReference  String?
-  approvedBy        String?
-  approvedAt        DateTime?
-  paidAt            DateTime?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  id               String           @id @default(cuid())
+  vendorId         String
+  periodFrom       DateTime
+  periodTo         DateTime
+  status           SettlementStatus @default(DRAFT)
+  // Importes (todos en Decimal, sin float)
+  grossSales       Decimal          @db.Decimal(12, 2)
+  commissionTotal  Decimal          @db.Decimal(12, 2)
+  refundsDeducted  Decimal          @db.Decimal(12, 2) @default(0)
+  netPayable       Decimal          @db.Decimal(12, 2) // calculado: gross - commission - refunds + adjustments
+  // Datos de pago
+  paymentReference String?
+  invoiceNumber    String?          // número de factura para contabilidad
+  invoiceUrl       String?          // PDF generado
+  // Aprobación
+  approvedBy       String?
+  approvedAt       DateTime?
+  paidAt           DateTime?
+  // Notas
+  internalNote     String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
-  vendor Vendor           @relation(fields: [vendorId], references: [id])
-  lines  SettlementLine[]
+  vendor      Vendor                @relation(fields: [vendorId], references: [id])
+  lines       SettlementLine[]
+  adjustments SettlementAdjustment[]
 
   @@index([vendorId])
   @@index([status])
+  @@index([periodFrom, periodTo])
   @@map("settlements")
 }
 
+// Una línea por cada OrderLine completada en el período
 model SettlementLine {
   id               String  @id @default(cuid())
   settlementId     String
@@ -540,18 +1056,35 @@ model SettlementLine {
   grossAmount      Decimal @db.Decimal(10, 2)
   commissionRate   Decimal @db.Decimal(5, 4)
   commissionAmount Decimal @db.Decimal(10, 2)
+  refundAmount     Decimal @db.Decimal(10, 2) @default(0) // devoluciones imputadas a esta línea
   netAmount        Decimal @db.Decimal(10, 2)
 
   settlement Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
   orderLine  OrderLine  @relation(fields: [orderLineId], references: [id])
 
   @@index([settlementId])
+  @@index([orderLineId])
   @@map("settlement_lines")
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// INCIDENTS & RETURNS
-// ─────────────────────────────────────────────────────────────────────────────
+// Correcciones manuales auditadas (nunca editar líneas existentes)
+model SettlementAdjustment {
+  id           String   @id @default(cuid())
+  settlementId String
+  amount       Decimal  @db.Decimal(10, 2) // puede ser negativo
+  reason       String
+  createdBy    String   // adminId
+  createdAt    DateTime @default(now())
+
+  settlement Settlement @relation(fields: [settlementId], references: [id])
+
+  @@index([settlementId])
+  @@map("settlement_adjustments")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: INCIDENCIAS Y DEVOLUCIONES
+// ═══════════════════════════════════════════════════════════════════════════════
 
 enum IncidentType {
   ITEM_NOT_RECEIVED
@@ -560,6 +1093,7 @@ enum IncidentType {
   ITEM_NOT_AS_DESCRIBED
   VENDOR_CANCELLED
   QUALITY_COMPLAINT
+  LATE_DELIVERY
 }
 
 enum IncidentStatus {
@@ -577,29 +1111,33 @@ enum IncidentResolution {
   REPLACEMENT
   REJECTED
   GOODWILL_CREDIT
+  NO_ACTION_NEEDED
 }
 
 model Incident {
   id           String              @id @default(cuid())
+  incidentRef  String              @unique // INC-2026-00089
   orderId      String
   orderLineId  String?
   vendorId     String
   customerId   String
+  assignedTo   String?             // adminId asignado
   type         IncidentType
   status       IncidentStatus      @default(OPEN)
   resolution   IncidentResolution?
   slaDeadline  DateTime
-  internalNote String?
+  slaBreached  Boolean             @default(false)
+  internalNote String?             @db.Text
   openedAt     DateTime            @default(now())
   resolvedAt   DateTime?
   closedAt     DateTime?
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
-  order     Order          @relation(fields: [orderId], references: [id])
-  orderLine OrderLine?     @relation(fields: [orderLineId], references: [id])
-  vendor    Vendor         @relation("VendorIncidents", fields: [vendorId], references: [id])
-  customer  User           @relation("CustomerIncidents", fields: [customerId], references: [id])
+  order     Order            @relation(fields: [orderId], references: [id])
+  orderLine OrderLine?       @relation(fields: [orderLineId], references: [id])
+  vendor    Vendor           @relation("VendorIncidents", fields: [vendorId], references: [id])
+  customer  User             @relation("CustomerIncidents", fields: [customerId], references: [id])
   messages  IncidentMessage[]
   refunds   IncidentRefund[]
 
@@ -607,6 +1145,8 @@ model Incident {
   @@index([vendorId])
   @@index([customerId])
   @@index([status])
+  @@index([slaDeadline, status])  // para alertas de SLA
+  @@index([assignedTo])
   @@map("incidents")
 }
 
@@ -626,9 +1166,11 @@ model IncidentMessage {
   @@map("incident_messages")
 }
 
+// Registro de compensaciones decididas por la incidencia
 model IncidentRefund {
   id            String   @id @default(cuid())
   incidentId    String
+  refundId      String?  // FK a Refund (si ya fue procesado)
   amount        Decimal  @db.Decimal(10, 2)
   reason        String
   fundedBy      String   // vendor | marketplace | split
@@ -641,4 +1183,89 @@ model IncidentRefund {
 
   @@index([incidentId])
   @@map("incident_refunds")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: AUDITORÍA Y TRAZABILIDAD
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Log técnico genérico e inmutable para toda operación relevante
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorId      String?  // userId (null = acción de sistema)
+  actorType    String   // user | vendor | admin | system
+  action       String   // settlement.approved | vendor.suspended | product.price_changed
+  resourceType String   // Order | Settlement | Vendor | Product ...
+  resourceId   String
+  before       Json?    // estado anterior
+  after        Json?    // estado posterior
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  actor User? @relation("ActorAuditLogs", fields: [actorId], references: [id])
+
+  @@index([actorId])
+  @@index([resourceType, resourceId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: NOTIFICACIONES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+  WEBHOOK
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  BOUNCED
+}
+
+model Notification {
+  id           String              @id @default(cuid())
+  userId       String?
+  channel      NotificationChannel
+  template     String              // "order.confirmed" | "settlement.paid" ...
+  recipient    String              // email / teléfono / endpoint
+  subject      String?
+  status       NotificationStatus  @default(QUEUED)
+  externalId   String?             // ID en Resend, Twilio, etc.
+  metadata     Json?               // variables del template
+  retryCount   Int                 @default(0)
+  errorMessage String?
+  sentAt       DateTime?
+  failedAt     DateTime?
+  createdAt    DateTime            @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([template])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOMINIO: CONFIGURACIÓN GLOBAL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Clave-valor para configuración operativa sin despliegues
+model MarketplaceConfig {
+  key         String   @id
+  value       String   @db.Text
+  description String?
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("marketplace_config")
 }
