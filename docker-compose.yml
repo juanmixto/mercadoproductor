@@ -1,9 +1,9 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # docker-compose.yml — Entorno de DESARROLLO con hot-reload
-# Uso: docker compose up
+# Uso: docker-compose up
 # ═══════════════════════════════════════════════════════════════════════════════
 
-name: mercadoproductor-dev
+version: "3.9"
 
 services:
 
@@ -50,8 +50,7 @@ services:
     environment:
       DATABASE_URL: postgresql://mp_user:mp_pass@postgres:5432/mercadoproductor
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
     restart: "no"
 
   # ─── API — Express + TypeScript ─────────────────────────────────────────────
@@ -59,7 +58,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-      target: deps              # en dev sólo instala deps, el código viene del volumen
+      target: deps
     volumes:
       - ./apps/api/src:/app/apps/api/src
       - ./packages/shared/src:/app/packages/shared/src
@@ -67,29 +66,26 @@ services:
       - /app/node_modules
       - /app/apps/api/node_modules
     working_dir: /app/apps/api
-    command: npx ts-node-dev --respawn --transpile-only src/index.ts
+    command: sh -c "sleep 5 && npx ts-node-dev --respawn --transpile-only src/index.ts"
     environment:
-      NODE_ENV:      development
-      DATABASE_URL:  postgresql://mp_user:mp_pass@postgres:5432/mercadoproductor
-      REDIS_URL:     redis://redis:6379
-      JWT_SECRET:    dev-secret-change-in-prod
-      JWT_EXPIRES_IN: 7d
-      API_PORT:      4000
-      WEB_URL:       http://localhost:3000
-      ADMIN_URL:     http://localhost:3001
-      VENDOR_URL:    http://localhost:3002
-      STRIPE_SECRET_KEY:   ${STRIPE_SECRET_KEY:-sk_test_placeholder}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
-      RESEND_API_KEY: ${RESEND_API_KEY:-re_placeholder}
+      NODE_ENV:               development
+      DATABASE_URL:           postgresql://mp_user:mp_pass@postgres:5432/mercadoproductor
+      REDIS_URL:              redis://redis:6379
+      JWT_SECRET:             dev-secret-change-in-prod
+      JWT_EXPIRES_IN:         7d
+      API_PORT:               4000
+      WEB_URL:                http://localhost:3000
+      ADMIN_URL:              http://localhost:3001
+      VENDOR_URL:             http://localhost:3002
+      STRIPE_SECRET_KEY:      ${STRIPE_SECRET_KEY:-sk_test_placeholder}
+      STRIPE_WEBHOOK_SECRET:  ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
+      RESEND_API_KEY:         ${RESEND_API_KEY:-re_placeholder}
     ports:
       - "4000:4000"
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      db-migrate:
-        condition: service_completed_successfully
+      - postgres
+      - redis
+      - db-migrate
     restart: unless-stopped
 
   # ─── Storefront Web ──────────────────────────────────────────────────────────

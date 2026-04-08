@@ -150,13 +150,12 @@ async function main() {
   console.log('✓ Products:', product1.name, '|', product2.name)
 
   // ─── Global commission rule ───────────────────────────────────────────────
-  const existingRule = await prisma.commissionRule.findFirst({ where: { appliesTo: 'all', vendorId: null } })
+  const existingRule = await prisma.commissionRule.findFirst({ where: { vendorId: null } })
   if (!existingRule) {
     await prisma.commissionRule.create({
       data: {
         name: 'Comisión estándar marketplace',
         type: CommissionType.PERCENTAGE,
-        appliesTo: 'all',
         priority: 0,
         rate: 0.12,
         includesTax: false,

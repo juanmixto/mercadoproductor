@@ -1,153 +1,155 @@
-// ─── Vendor (Productor) ──────────────────────────────────────────────────────
+// Enums alineados con los valores del schema Prisma (UPPERCASE)
+
+// ─── Vendor ───────────────────────────────────────────────────────────────────
 
 export enum VendorStatus {
-  APPLYING = 'applying',
-  PENDING_DOCS = 'pending_docs',
-  ACTIVE = 'active',
-  SUSPENDED_TEMP = 'suspended_temp',
-  REJECTED = 'rejected',
-  DEACTIVATED = 'deactivated',
+  APPLYING       = 'APPLYING',
+  PENDING_DOCS   = 'PENDING_DOCS',
+  ACTIVE         = 'ACTIVE',
+  SUSPENDED_TEMP = 'SUSPENDED_TEMP',
+  REJECTED       = 'REJECTED',
+  DEACTIVATED    = 'DEACTIVATED',
 }
 
 // ─── Product ─────────────────────────────────────────────────────────────────
 
 export enum ProductStatus {
-  DRAFT = 'draft',
-  PENDING_REVIEW = 'pending_review',
-  ACTIVE = 'active',
-  SUSPENDED = 'suspended',
-  DISCONTINUED = 'discontinued',
-  REJECTED = 'rejected',
+  DRAFT          = 'DRAFT',
+  PENDING_REVIEW = 'PENDING_REVIEW',
+  ACTIVE         = 'ACTIVE',
+  SUSPENDED      = 'SUSPENDED',
+  DISCONTINUED   = 'DISCONTINUED',
+  REJECTED       = 'REJECTED',
 }
 
 // ─── Order ───────────────────────────────────────────────────────────────────
 
 export enum OrderStatus {
-  PLACED = 'placed',
-  PAYMENT_PENDING = 'payment_pending',
-  PAYMENT_FAILED = 'payment_failed',
-  PAYMENT_CONFIRMED = 'payment_confirmed',
-  PROCESSING = 'processing',
-  PARTIALLY_READY = 'partially_ready',
-  READY_TO_SHIP = 'ready_to_ship',
-  PARTIALLY_SHIPPED = 'partially_shipped',
-  SHIPPED = 'shipped',
-  PARTIALLY_DELIVERED = 'partially_delivered',
-  DELIVERED = 'delivered',
-  COMPLETED = 'completed',
-  CANCELLED = 'cancelled',
+  PLACED               = 'PLACED',
+  PAYMENT_PENDING      = 'PAYMENT_PENDING',
+  PAYMENT_FAILED       = 'PAYMENT_FAILED',
+  PAYMENT_CONFIRMED    = 'PAYMENT_CONFIRMED',
+  PROCESSING           = 'PROCESSING',
+  PARTIALLY_READY      = 'PARTIALLY_READY',
+  READY_TO_SHIP        = 'READY_TO_SHIP',
+  PARTIALLY_SHIPPED    = 'PARTIALLY_SHIPPED',
+  SHIPPED              = 'SHIPPED',
+  PARTIALLY_DELIVERED  = 'PARTIALLY_DELIVERED',
+  DELIVERED            = 'DELIVERED',
+  COMPLETED            = 'COMPLETED',
+  CANCELLED            = 'CANCELLED',
 }
 
 export enum OrderLineStatus {
-  PENDING_VENDOR_CONFIRMATION = 'pending_vendor_confirmation',
-  CONFIRMED = 'confirmed',
-  PREPARING = 'preparing',
-  SHIPPED = 'shipped',
-  DELIVERED = 'delivered',
-  COMPLETED = 'completed',
-  CANCELLED_BY_VENDOR = 'cancelled_by_vendor',
-  CANCELLED_BY_ADMIN = 'cancelled_by_admin',
-  CANCELLED_BY_CUSTOMER = 'cancelled_by_customer',
+  PENDING_VENDOR_CONFIRMATION = 'PENDING_VENDOR_CONFIRMATION',
+  CONFIRMED                   = 'CONFIRMED',
+  PREPARING                   = 'PREPARING',
+  SHIPPED                     = 'SHIPPED',
+  DELIVERED                   = 'DELIVERED',
+  COMPLETED                   = 'COMPLETED',
+  CANCELLED_BY_VENDOR         = 'CANCELLED_BY_VENDOR',
+  CANCELLED_BY_ADMIN          = 'CANCELLED_BY_ADMIN',
+  CANCELLED_BY_CUSTOMER       = 'CANCELLED_BY_CUSTOMER',
 }
 
 // ─── Payment ─────────────────────────────────────────────────────────────────
 
 export enum PaymentStatus {
-  PENDING = 'pending',
-  PROCESSING = 'processing',
-  SUCCEEDED = 'succeeded',
-  FAILED = 'failed',
-  REFUNDED = 'refunded',
-  PARTIALLY_REFUNDED = 'partially_refunded',
+  PENDING             = 'PENDING',
+  PROCESSING          = 'PROCESSING',
+  SUCCEEDED           = 'SUCCEEDED',
+  FAILED              = 'FAILED',
+  REFUNDED            = 'REFUNDED',
+  PARTIALLY_REFUNDED  = 'PARTIALLY_REFUNDED',
 }
 
 // ─── Fulfillment ─────────────────────────────────────────────────────────────
 
 export enum FulfillmentStatus {
-  PENDING = 'pending',
-  CONFIRMED = 'confirmed',
-  PREPARING = 'preparing',
-  READY = 'ready',
-  SHIPPED = 'shipped',
-  DELIVERED = 'delivered',
-  FAILED = 'failed',
+  PENDING   = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  PREPARING = 'PREPARING',
+  READY     = 'READY',
+  SHIPPED   = 'SHIPPED',
+  DELIVERED = 'DELIVERED',
+  FAILED    = 'FAILED',
 }
 
 // ─── Incident ────────────────────────────────────────────────────────────────
 
 export enum IncidentType {
-  ITEM_NOT_RECEIVED = 'item_not_received',
-  ITEM_DAMAGED = 'item_damaged',
-  WRONG_ITEM = 'wrong_item',
-  ITEM_NOT_AS_DESCRIBED = 'item_not_as_described',
-  VENDOR_CANCELLED = 'vendor_cancelled',
-  QUALITY_COMPLAINT = 'quality_complaint',
+  ITEM_NOT_RECEIVED     = 'ITEM_NOT_RECEIVED',
+  ITEM_DAMAGED          = 'ITEM_DAMAGED',
+  WRONG_ITEM            = 'WRONG_ITEM',
+  ITEM_NOT_AS_DESCRIBED = 'ITEM_NOT_AS_DESCRIBED',
+  VENDOR_CANCELLED      = 'VENDOR_CANCELLED',
+  QUALITY_COMPLAINT     = 'QUALITY_COMPLAINT',
 }
 
 export enum IncidentStatus {
-  OPEN = 'open',
-  AWAITING_VENDOR = 'awaiting_vendor',
-  AWAITING_CUSTOMER = 'awaiting_customer',
-  AWAITING_ADMIN = 'awaiting_admin',
-  RESOLVED = 'resolved',
-  CLOSED = 'closed',
+  OPEN               = 'OPEN',
+  AWAITING_VENDOR    = 'AWAITING_VENDOR',
+  AWAITING_CUSTOMER  = 'AWAITING_CUSTOMER',
+  AWAITING_ADMIN     = 'AWAITING_ADMIN',
+  RESOLVED           = 'RESOLVED',
+  CLOSED             = 'CLOSED',
 }
 
 export enum IncidentResolution {
-  REFUND_FULL = 'refund_full',
-  REFUND_PARTIAL = 'refund_partial',
-  REPLACEMENT = 'replacement',
-  REJECTED = 'rejected',
-  GOODWILL_CREDIT = 'goodwill_credit',
+  REFUND_FULL       = 'REFUND_FULL',
+  REFUND_PARTIAL    = 'REFUND_PARTIAL',
+  REPLACEMENT       = 'REPLACEMENT',
+  REJECTED          = 'REJECTED',
+  GOODWILL_CREDIT   = 'GOODWILL_CREDIT',
 }
 
 export enum IncidentFundedBy {
-  VENDOR = 'vendor',
+  VENDOR      = 'vendor',
   MARKETPLACE = 'marketplace',
-  SPLIT = 'split',
+  SPLIT       = 'split',
 }
 
 // ─── Settlement ──────────────────────────────────────────────────────────────
 
 export enum SettlementStatus {
-  DRAFT = 'draft',
-  PENDING_APPROVAL = 'pending_approval',
-  APPROVED = 'approved',
-  PAID = 'paid',
-  DISPUTED = 'disputed',
+  DRAFT             = 'DRAFT',
+  PENDING_APPROVAL  = 'PENDING_APPROVAL',
+  APPROVED          = 'APPROVED',
+  PAID              = 'PAID',
+  DISPUTED          = 'DISPUTED',
 }
 
 export enum CommissionType {
-  PERCENTAGE = 'percentage',
-  FIXED = 'fixed',
-  TIERED = 'tiered',
+  PERCENTAGE = 'PERCENTAGE',
+  FIXED      = 'FIXED',
+  TIERED     = 'TIERED',
 }
 
 // ─── Cart ────────────────────────────────────────────────────────────────────
 
 export enum CartStatus {
-  ACTIVE = 'active',
-  ABANDONED = 'abandoned',
-  CONVERTED = 'converted',
+  ACTIVE    = 'ACTIVE',
+  ABANDONED = 'ABANDONED',
+  CONVERTED = 'CONVERTED',
 }
 
 // ─── User / Admin ────────────────────────────────────────────────────────────
 
 export enum UserRole {
-  CUSTOMER = 'customer',
-  VENDOR = 'vendor',
-  ADMIN_SUPPORT = 'admin_support',
-  ADMIN_CATALOG = 'admin_catalog',
-  ADMIN_FINANCE = 'admin_finance',
-  ADMIN_OPS = 'admin_ops',
-  SUPERADMIN = 'superadmin',
+  CUSTOMER       = 'CUSTOMER',
+  VENDOR         = 'VENDOR',
+  ADMIN_SUPPORT  = 'ADMIN_SUPPORT',
+  ADMIN_CATALOG  = 'ADMIN_CATALOG',
+  ADMIN_FINANCE  = 'ADMIN_FINANCE',
+  ADMIN_OPS      = 'ADMIN_OPS',
+  SUPERADMIN     = 'SUPERADMIN',
 }
 
-// ─── Event triggers ──────────────────────────────────────────────────────────
+// ─── Event trigger ────────────────────────────────────────────────────────────
 
 export enum EventTrigger {
   CUSTOMER = 'customer',
-  VENDOR = 'vendor',
-  ADMIN = 'admin',
-  SYSTEM = 'system',
+  VENDOR   = 'vendor',
+  ADMIN    = 'admin',
+  SYSTEM   = 'system',
 }
